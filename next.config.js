@@ -1,10 +1,12 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-  experimental: {
-    appDir: true,
-  },
+  experimental: {},
   images: {
     domains: ['localhost'],
+  },
+  // Custom port configuration
+  env: {
+    PORT: 3003,
   },
   // Accessibility optimizations
   async headers() {

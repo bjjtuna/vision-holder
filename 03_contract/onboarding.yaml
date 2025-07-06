@@ -1,0 +1,100 @@
+openapi: 3.0.1
+info:
+  title: Onboarding API
+  version: "1.0.0-alpha"
+  description: REST interface for Guided User Onboarding Flow (Mission onboard_users).
+servers:
+  - url: http://localhost:3002 # expected host (Orchestrator service)
+paths:
+  /onboarding/steps:
+    get:
+      summary: List onboarding steps
+      tags: [Onboarding]
+      responses:
+        '200':
+          description: Ordered list of onboarding steps
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/OnboardingStep'
+  /onboarding/state:
+    get:
+      summary: Get current onboarding state for user
+      tags: [Onboarding]
+      responses:
+        '200':
+          description: Current user onboarding state
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/UserOnboardingState'
+    post:
+      summary: Update onboarding state for user
+      tags: [Onboarding]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UserOnboardingState'
+      responses:
+        '200':
+          description: Updated state
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/UserOnboardingState'
+        '201':
+          description: State created for first-time user
+components:
+  schemas:
+    OnboardingStep:
+      type: object
+      required: [id, title, description, order, component, tooltip, cta]
+      properties:
+        id:
+          type: string
+        title:
+          type: string
+        description:
+          type: string
+        order:
+          type: integer
+          minimum: 1
+        component:
+          type: string
+          enum: [roadmap, chat, knowledge, terminal]
+        tooltip:
+          type: string
+        cta:
+          type: string
+    UserOnboardingState:
+      type: object
+      required: [user_id, current_step, completed_steps, started_at]
+      properties:
+        user_id:
+          type: string
+        current_step:
+          type: string
+        completed_steps:
+          type: array
+          items:
+            type: string
+        started_at:
+          type: string
+          format: date-time
+        completed_at:
+          type: string
+          format: date-time
+          nullable: true 

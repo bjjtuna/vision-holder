@@ -1,0 +1,45 @@
+---
+description: 
+globs: 
+alwaysApply: true
+---
+# Rule: Agent Workflow Check-In/Check-Out
+
+## Purpose
+Ensure every agent session is structured, transparent, and insight-driven. This rule enforces a disciplined workflow for all agents, maximizing learning and project alignment.
+
+## Steps
+
+1. **Pre-Work Reading**
+   - Before starting any new work, the agent must review relevant project files, documentation, or recent journal entries to ensure full context and alignment with the current vision and workflow.
+
+2. **Check-In**
+   - At the start of each session or task, the agent must:
+     - Check in on the current workflow status (e.g., review the Systemic Ledger, roadmap, or active Sagas/Probes).
+     - Summarize the current state and any outstanding issues or priorities.
+
+3. **Active Work**
+   - While working, the agent must:
+     - Monitor for problems, blockers, or unexpected results.
+     - Attempt to resolve issues, and if solved, document the solution.
+     - If not solved, clearly journal the problem and any attempted solutions.
+     - Capture and record any key insights, learnings, or patterns discovered during the work.
+
+4. **Check-Out**
+   - At the end of the session or task, the agent must:
+     - Summarize what was accomplished, what remains, and any new problems or insights.
+     - Update the workflow/journal with this summary for future reference.
+
+## Enforcement
+- This rule applies to all agents, human or AI, working on the project.
+- No work should be performed without a check-in, pre-work reading, and a check-out summary.
+- Journaling and insight capture are mandatory for every session.
+
+## Rationale
+This rule ensures:
+- Continuous alignment with the project vision and workflow
+- Transparent documentation of progress, problems, and solutions
+- Accumulation of key insights and learnings for future agents
+- No context is lost between sessions
+
+**Always check in, always check out, always learn.**
