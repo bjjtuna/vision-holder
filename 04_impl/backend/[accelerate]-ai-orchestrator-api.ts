@@ -7,6 +7,10 @@ import { v4 as uuidv4 } from 'uuid';
 import { aiService } from './[accelerate]-ai-service-integration';
 import { setupSecurityMiddleware, rateLimits } from './[safeguard]-security-middleware';
 
+// Load environment variables
+import dotenv from 'dotenv';
+dotenv.config();
+
 // Types based on contract schema
 export interface WisdomInsight {
   id: string;
@@ -63,6 +67,20 @@ export interface UserOnboardingState {
   completed_at: string | null;
 }
 
+// Chat message interface for real-time communication
+export interface ChatMessage {
+  id: string;
+  role: 'user' | 'assistant' | 'system';
+  content: string;
+  timestamp: string;
+  attachments?: Array<{name: string; size: number; type: string}>;
+  context?: {
+    systemic_ledger?: any;
+    wisdom_insights?: WisdomInsight[];
+    user_preferences?: UserPreference;
+  };
+}
+
 // In-memory storage (replace with database in production)
 let wisdomMemory: WisdomInsight[] = [];
 let userPreferences: UserPreference = {
@@ -71,6 +89,37 @@ let userPreferences: UserPreference = {
   learning_pace: 'moderate',
   accessibility_needs: [],
   preferred_feedback: []
+};
+
+// Chat history storage
+let chatHistory: ChatMessage[] = [];
+
+// Knowledge base context retrieval helper
+const getRelevantContextFromKnowledgeBase = async (userMessage: string, limit: number = 3): Promise<any> => {
+  try {
+    // Search knowledge base for relevant chat sessions
+    const searchResponse = await fetch(`http://localhost:3003/knowledge/search?q=${encodeURIComponent(userMessage)}&type=all&limit=${limit}`);
+    const searchData = await searchResponse.json();
+    
+    if (searchData.documents && searchData.documents.length > 0) {
+      return {
+        relevant_sessions: searchData.documents.slice(0, limit).map((doc: any) => ({
+          name: doc.name,
+          summary: doc.ai_analysis?.summary || 'Chat session',
+          key_points: doc.ai_analysis?.key_points?.slice(0, 3) || [],
+          relevance_score: doc.ai_analysis?.relevance_score || 0,
+          tags: doc.tags || []
+        })),
+        total_relevant_sessions: searchData.total,
+        search_query: userMessage.slice(0, 100)
+      };
+    }
+    
+    return { relevant_sessions: [], total_relevant_sessions: 0, search_query: userMessage.slice(0, 100) };
+  } catch (error) {
+    console.error('[accelerate] Knowledge base retrieval failed:', error);
+    return { relevant_sessions: [], total_relevant_sessions: 0, search_query: userMessage.slice(0, 100) };
+  }
 };
 
 // Onboarding storage
@@ -161,6 +210,17 @@ initializeDefaultWisdom();
 const app = express();
 const PORT = process.env['PORT'] || 3002;
 
+// CORS middleware
+app.use(cors({
+  origin: ['http://localhost:3000', 'http://localhost:3001'],
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'x-mock-user']
+}));
+
+// JSON parsing middleware
+app.use(express.json());
+
 // Security middleware
 setupSecurityMiddleware(app);
 
@@ -168,6 +228,7 @@ setupSecurityMiddleware(app);
 app.use('/onboarding', rateLimits.general);
 app.use('/wisdom', rateLimits.api);
 app.use('/context', rateLimits.api);
+app.use('/chat', rateLimits.api);
 
 // Helper functions
 const getRelevantWisdom = (task: string, builderType: string): WisdomInsight[] => {
@@ -196,26 +257,20 @@ const getRelevantWisdom = (task: string, builderType: string): WisdomInsight[] =
 };
 
 const buildMinimalContext = (
-  _mission: LedgerEntry | null,
-  _pillars: LedgerEntry[],
-  _task: string,
-  _builderType: string
+  mission: LedgerEntry | null,
+  pillars: LedgerEntry[],
+  task: string,
+  builderType: string
 ): string => {
-  let context = `Task: ${_task}
-Builder Type: ${_builderType}
+  let context = `Task: ${task}\nBuilder Type: ${builderType}\n`;
 
-`;
-
-  if (_mission) {
-    context += `Mission: ${_mission.content['statement'] || _mission.seek}
-`;
-    context += `Mission Seek: ${_mission.seek}
-`;
+  if (mission) {
+    context += `Mission: ${mission.seek} (${mission.why})\n`;
   }
 
-  if (_pillars.length > 0) {
-    context += `\nKey Principles:\n`;
-    _pillars.forEach(pillar => {
+  if (pillars.length > 0) {
+    context += `Active Pillars:\n`;
+    pillars.forEach(pillar => {
       context += `- ${pillar.seek}: ${pillar.why}\n`;
     });
   }
@@ -229,28 +284,47 @@ const performAlignmentCheck = (
   pillars: LedgerEntry[]
 ): { aligned: boolean; reasons: string[] } => {
   const reasons: string[] = [];
+  let aligned = true;
 
   if (!mission) {
-    reasons.push('No active mission to align with');
-    return { aligned: false, reasons };
+    reasons.push('No mission defined to check alignment against');
+    aligned = false;
+    return { aligned, reasons };
   }
 
-  // Simple keyword-based alignment check
   const taskKeywords = task.toLowerCase().split(' ');
   const missionKeywords = mission.seek.toLowerCase().split(' ');
 
-  const hasCommonKeywords = taskKeywords.some(tk => 
-    missionKeywords.some(mk => mk.includes(tk) || tk.includes(mk))
+  // Check mission alignment
+  const missionAlignment = taskKeywords.some(keyword =>
+    missionKeywords.some(missionKeyword =>
+      keyword.includes(missionKeyword) || missionKeyword.includes(keyword)
+    )
   );
 
-  if (!hasCommonKeywords) {
-    reasons.push(`Task may not align with mission seek: "${mission.seek}"`);
+  if (!missionAlignment) {
+    reasons.push('Task does not appear to align with current mission focus');
+    aligned = false;
   }
 
-  return {
-    aligned: reasons.length === 0,
-    reasons
-  };
+  // Check pillar alignment
+  if (pillars.length > 0) {
+    const pillarAlignment = pillars.some(pillar => {
+      const pillarKeywords = pillar.seek.toLowerCase().split(' ');
+      return taskKeywords.some(keyword =>
+        pillarKeywords.some(pillarKeyword =>
+          keyword.includes(pillarKeyword) || pillarKeyword.includes(keyword)
+        )
+      );
+    });
+
+    if (!pillarAlignment) {
+      reasons.push('Task does not align with any active pillars');
+      aligned = false;
+    }
+  }
+
+  return { aligned, reasons };
 };
 
 const generateBuilderInstructions = async (
@@ -304,7 +378,91 @@ const generateBuilderInstructions = async (
   }
 };
 
+// Enhanced context engineering with Knowledge Base integration
+const generateEnhancedContext = async (
+  userMessage: string,
+  systemicLedger?: any,
+  conversationHistory: ChatMessage[] = []
+): Promise<string> => {
+  try {
+    // Get relevant wisdom insights
+    const relevantWisdom = getRelevantWisdom(userMessage, 'chat');
+    
+    // Get relevant context from knowledge base instead of full conversation history
+    const knowledgeBaseContext = await getRelevantContextFromKnowledgeBase(userMessage, 2);
+    
+    // Build context from Systemic Ledger
+    let ledgerContext = '';
+    if (systemicLedger) {
+      if (systemicLedger.mission) {
+        ledgerContext += `Current Mission: ${systemicLedger.mission.text}\n`;
+        ledgerContext += `Mission Goal: ${systemicLedger.mission.seek}\n`;
+        ledgerContext += `Mission Purpose: ${systemicLedger.mission.why}\n\n`;
+      }
+      
+      if (systemicLedger.pillars && systemicLedger.pillars.length > 0) {
+        ledgerContext += `Active Pillars:\n`;
+        systemicLedger.pillars.forEach((pillar: any) => {
+          ledgerContext += `- ${pillar.text}: ${pillar.seek} (${pillar.why})\n`;
+        });
+        ledgerContext += '\n';
+      }
+    }
+
+    // Build minimal recent conversation context (only last 3 messages)
+    const recentHistory = conversationHistory
+      .slice(-3)
+      .map(msg => `${msg.role}: ${msg.content.slice(0, 100)}...`)
+      .join('\n');
+
+    // Build knowledge base context
+    let kbContext = '';
+    if (knowledgeBaseContext.relevant_sessions.length > 0) {
+      kbContext += `Relevant Previous Conversations:\n`;
+      knowledgeBaseContext.relevant_sessions.forEach((session: any) => {
+        kbContext += `- ${session.summary} (relevance: ${session.relevance_score})\n`;
+        if (session.key_points.length > 0) {
+          kbContext += `  Key points: ${session.key_points.join(', ')}\n`;
+        }
+      });
+      kbContext += '\n';
+    }
+
+    // Generate enhanced context using AI
+    const contextPrompt = `
+User Message: ${userMessage}
+
+${ledgerContext ? `Systemic Ledger Context:\n${ledgerContext}` : ''}
+
+${kbContext ? `Knowledge Base Context:\n${kbContext}` : ''}
+
+${recentHistory ? `Recent Conversation:\n${recentHistory}\n` : ''}
+
+${relevantWisdom.length > 0 ? `User Insights:\n${relevantWisdom.map(w => w.insight).join('\n')}\n` : ''}
+
+Generate a comprehensive context that helps provide the most relevant and helpful response to the user's message.`;
+
+    const enhancedContext = await aiService.generateContext(userMessage, [contextPrompt]);
+    return enhancedContext;
+  } catch (error) {
+    console.error('Enhanced context generation failed:', error);
+    return `User is asking: ${userMessage}`;
+  }
+};
+
 // API Routes
+
+// GET /health - Health check endpoint
+app.get('/health', (req, res) => {
+  res.json({
+    status: 'healthy',
+    service: 'AI Orchestrator API',
+    timestamp: new Date().toISOString(),
+    ai_service: aiService ? 'configured' : 'not configured',
+    wisdom_memory_count: wisdomMemory.length,
+    user_preferences: userPreferences
+  });
+});
 
 // POST /orchestrator/context - Generate minimal context prompt
 app.post('/orchestrator/context', async (req, res) => {
@@ -343,6 +501,145 @@ app.post('/orchestrator/context', async (req, res) => {
       error: 'Internal server error'
     });
   }
+});
+
+// POST /orchestrator/chat - Real AI chat with attachment support
+app.post('/orchestrator/chat', async (req, res) => {
+  try {
+    console.log('=== CHAT REQUEST DEBUG ===');
+    console.log('Headers:', req.headers);
+    console.log('Method:', req.method);
+    console.log('URL:', req.url);
+    console.log('Content-Length:', req.headers['content-length']);
+    console.log('Content-Type:', req.headers['content-type']);
+    console.log('Raw body type:', typeof req.body);
+    console.log('Raw body:', req.body);
+    console.log('Body keys:', Object.keys(req.body || {}));
+    console.log('Received chat request body:', JSON.stringify(req.body, null, 2));
+    
+    const { message, systemicLedger, attachments = [] } = req.body;
+
+    console.log('Extracted fields:', { 
+      message, 
+      messageType: typeof message, 
+      messageValue: message,
+      messageLength: message?.length,
+      messageExists: 'message' in (req.body || {}),
+      systemicLedger: !!systemicLedger,
+      attachments: attachments?.length || 0
+    });
+
+    if (!message || typeof message !== 'string' || message.trim() === '') {
+      console.log('Invalid message field:', { message, type: typeof message, empty: message === '', whitespace: message?.trim() === '' });
+      return res.status(400).json({
+        error: 'message field is required and must be a non-empty string'
+      });
+    }
+
+    // Validate attachments if provided
+    if (attachments && !Array.isArray(attachments)) {
+      return res.status(400).json({
+        error: 'attachments must be an array'
+      });
+    }
+
+    // Process attachment context
+    let attachmentContext = '';
+    if (attachments && attachments.length > 0) {
+      attachmentContext = `\nUser uploaded ${attachments.length} file(s):\n` +
+        attachments.map((att: any) => `- ${att.name} (${att.type}, ${att.size} bytes)`).join('\n');
+    }
+
+    // Store user message with attachments
+    const userMessage: ChatMessage = {
+      id: uuidv4(),
+      role: 'user',
+      content: message,
+      timestamp: new Date().toISOString(),
+      attachments: attachments,
+      context: { systemic_ledger: systemicLedger }
+    };
+    chatHistory.push(userMessage);
+
+    // Generate enhanced context with attachment info
+    const enhancedContext = await generateEnhancedContext(
+      message + attachmentContext, 
+      systemicLedger, 
+      chatHistory
+    );
+
+    // Get relevant wisdom insights
+    const relevantWisdom = getRelevantWisdom(message, 'chat');
+
+    // Generate AI response
+    const aiResponse = await aiService.generateText(message, enhancedContext);
+
+    // Store AI response
+    const assistantMessage: ChatMessage = {
+      id: uuidv4(),
+      role: 'assistant',
+      content: aiResponse,
+      timestamp: new Date().toISOString(),
+      context: {
+        systemic_ledger: systemicLedger,
+        wisdom_insights: relevantWisdom,
+        user_preferences: userPreferences
+      }
+    };
+    chatHistory.push(assistantMessage);
+
+    // Extract new insights from the conversation
+    const conversationText = `${message}\n${aiResponse}`;
+    const newInsights = await aiService.extractInsights(conversationText);
+    
+    // Store new insights in wisdom memory
+    newInsights.forEach(insight => {
+      const wisdomInsight: WisdomInsight = {
+        id: uuidv4(),
+        insight: insight.insight,
+        relevance_score: insight.relevance_score,
+        context_triggers: [insight.context_trigger],
+        user_preference: { category: insight.category },
+        timestamp: new Date().toISOString(),
+        usage_count: 0
+      };
+      wisdomMemory.push(wisdomInsight);
+    });
+
+    res.json({
+      response: aiResponse,
+      context: enhancedContext,
+      wisdom_insights: relevantWisdom,
+      new_insights_count: newInsights.length
+    });
+
+  } catch (error) {
+    console.error('Error in chat:', error);
+    res.status(500).json({
+      error: 'Internal server error',
+      message: 'Failed to generate AI response'
+    });
+  }
+});
+
+// GET /orchestrator/chat/history - Get chat history
+app.get('/orchestrator/chat/history', (req, res) => {
+  const { limit = '50' } = req.query;
+  const limitNum = parseInt(limit as string) || 50;
+  
+  const recentHistory = chatHistory
+    .slice(-limitNum)
+    .map(msg => ({
+      id: msg.id,
+      role: msg.role,
+      content: msg.content,
+      timestamp: msg.timestamp
+    }));
+
+  res.json({
+    messages: recentHistory,
+    total: chatHistory.length
+  });
 });
 
 // POST /orchestrator/wisdom - Store new wisdom insight

@@ -4,13 +4,15 @@
 // Integrates roadmap and chat interfaces for complete Vision Holder experience
 
 import React, { useState, useEffect } from 'react';
-import { SystemicLedgerAPI } from '../systemic-ledger/[accelerate]-ledger-api-client';
-import { aiOrchestrator } from '../ai-orchestrator/[accelerate]-orchestrator-core';
+// NOTE: SystemicLedgerAPI and aiOrchestrator are backend services
+// For now, we'll use the service integration layer instead
 import { RoadmapView } from './components/[empathize]-roadmap-view';
 import { ChatInterface } from './components/[empathize]-chat-interface';
 import { WisdomMemoryView } from './components/[empathize]-wisdom-memory-view';
 import { KnowledgeBaseView } from './components/[accelerate]-knowledge-base-view';
 import { TerminalView } from './components/[safeguard]-terminal-view';
+import { DevelopmentWorkspace } from './components/[delight]-development-workspace';
+import { ProjectDashboard } from './components/[empathize]-project-dashboard';
 import { 
   Map, 
   MessageCircle, 
@@ -21,24 +23,26 @@ import {
   Menu,
   X,
   AlertCircle,
-  Loader
+  Loader,
+  Code,
+  BarChart3
 } from 'lucide-react';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { OnboardingWizard } from './components/[delight]-onboarding-wizard';
-import { OnboardingTooltip } from './components/[delight]-onboarding-tooltip';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '../components/ui/tabs';
+import { OnboardingWizard } from '../components/[delight]-onboarding-wizard';
+import { OnboardingTooltip } from '../components/[empathize]-onboarding-tooltip';
 
 interface MainApplicationProps {
   className?: string;
 }
 
-type ActiveTab = 'roadmap' | 'chat' | 'wisdom' | 'knowledge' | 'terminal';
+type ActiveTab = 'dashboard' | 'workspace' | 'roadmap' | 'chat' | 'wisdom' | 'knowledge' | 'terminal';
 
 // Mock user ID for development
 const MOCK_USER_ID = `user-${Date.now()}`;
 
 export const MainApplication: React.FC<MainApplicationProps> = ({ className = '' }) => {
   const [showOnboarding, setShowOnboarding] = useState(true);
-  const [activeTab, setActiveTab] = useState<ActiveTab>('roadmap');
+  const [activeTab, setActiveTab] = useState<ActiveTab>('dashboard');
   const [isDarkMode, setIsDarkMode] = useState(false);
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const [selectedEntry, setSelectedEntry] = useState<any>(null);
@@ -49,8 +53,8 @@ export const MainApplication: React.FC<MainApplicationProps> = ({ className = ''
     orchestrator: false
   });
 
-  // Initialize API client
-  const ledgerAPI = new SystemicLedgerAPI();
+  // Initialize API client using service integration
+  // const ledgerAPI = new SystemicLedgerAPI(); // Commented out - using service integration instead
 
   useEffect(() => {
     // Check for saved theme preference
@@ -78,12 +82,15 @@ export const MainApplication: React.FC<MainApplicationProps> = ({ className = ''
       setError(null);
       
       try {
-        // Check ledger API
-        const ledgerHealthy = await ledgerAPI.healthCheck();
+        // Check ledger API using fetch directly
+        const response = await fetch('http://localhost:3001/health');
+        const ledgerHealthy = response.ok;
         setApiStatus(prev => ({ ...prev, ledger: ledgerHealthy }));
         
-        // TODO: Add orchestrator API health check when implemented
-        setApiStatus(prev => ({ ...prev, orchestrator: true }));
+        // Check orchestrator API 
+        const orchestratorResponse = await fetch('http://localhost:3002/health');
+        const orchestratorHealthy = orchestratorResponse.ok;
+        setApiStatus(prev => ({ ...prev, orchestrator: orchestratorHealthy }));
         
         if (!ledgerHealthy) {
           setError('Systemic Ledger API is not responding. Some features may be limited.');
@@ -136,8 +143,12 @@ export const MainApplication: React.FC<MainApplicationProps> = ({ className = ''
 
   const handleNewEntry = async (entry: any) => {
     try {
-      // Add entry to ledger via API
-      await ledgerAPI.addEntry(entry);
+      // Add entry to ledger via API using fetch
+      await fetch('http://localhost:3001/entry', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(entry)
+      });
       console.log('New entry created:', entry);
       // Refresh roadmap data
       setSelectedEntry(null);
@@ -184,13 +195,20 @@ export const MainApplication: React.FC<MainApplicationProps> = ({ className = ''
     }
 
     switch (activeTab) {
+      case 'dashboard':
+        return (
+          <ProjectDashboard className="h-full" />
+        );
+      case 'workspace':
+        return (
+          <DevelopmentWorkspace className="h-full" />
+        );
       case 'roadmap':
         return (
           <OnboardingTooltip component="roadmap" userId={MOCK_USER_ID}>
             <RoadmapView 
               onEntrySelect={setSelectedEntry}
               className="h-full"
-              ledgerAPI={ledgerAPI}
             />
           </OnboardingTooltip>
         );
@@ -200,15 +218,31 @@ export const MainApplication: React.FC<MainApplicationProps> = ({ className = ''
             <ChatInterface 
               onNewEntry={handleNewEntry}
               className="h-full"
-              ledgerAPI={ledgerAPI}
+              systemicLedger={{
+                mission: {
+                  text: "Achieve product-market fit for the Alpha release",
+                  seek: "validate",
+                  why: "To ensure we are building something people want before scaling"
+                },
+                pillars: [
+                  {
+                    text: "User Experience",
+                    seek: "empathize",
+                    why: "Understand user needs deeply"
+                  },
+                  {
+                    text: "Technical Excellence",
+                    seek: "accelerate",
+                    why: "Build robust, scalable solutions"
+                  }
+                ]
+              }}
             />
           </OnboardingTooltip>
         );
       case 'wisdom':
         return (
-          <OnboardingTooltip component="wisdom" userId={MOCK_USER_ID}>
-            <WisdomMemoryView className="h-full" />
-          </OnboardingTooltip>
+          <WisdomMemoryView className="h-full" />
         );
       case 'knowledge':
         return (
@@ -228,6 +262,8 @@ export const MainApplication: React.FC<MainApplicationProps> = ({ className = ''
   };
 
   const tabConfig = [
+    { id: 'dashboard' as ActiveTab, label: 'Dashboard', icon: BarChart3 },
+    { id: 'workspace' as ActiveTab, label: 'Dev Workspace', icon: Code },
     { id: 'roadmap' as ActiveTab, label: 'Roadmap', icon: Map },
     { id: 'chat' as ActiveTab, label: 'Co-Vision Chat', icon: MessageCircle },
     { id: 'wisdom' as ActiveTab, label: 'Wisdom Memory', icon: Brain },
@@ -240,8 +276,9 @@ export const MainApplication: React.FC<MainApplicationProps> = ({ className = ''
       {/* Onboarding wizard */}
       {showOnboarding && (
         <OnboardingWizard
-          userId={MOCK_USER_ID}
+          isOpen={showOnboarding}
           onComplete={handleOnboardingComplete}
+          onClose={() => setShowOnboarding(false)}
         />
       )}
 
@@ -320,6 +357,8 @@ export const MainApplication: React.FC<MainApplicationProps> = ({ className = ''
                 {tabConfig.find(tab => tab.id === activeTab)?.label}
               </h2>
               <p className="text-sm text-gray-600 dark:text-gray-400 text-dyslexia-friendly">
+                {activeTab === 'dashboard' && 'Visual project progress and performance metrics'}
+                {activeTab === 'workspace' && 'Integrated development environment with AI collaboration'}
                 {activeTab === 'roadmap' && 'Visual overview of your project structure'}
                 {activeTab === 'chat' && 'AI-powered project management assistant'}
                 {activeTab === 'wisdom' && 'User preferences and insights'}
@@ -330,7 +369,7 @@ export const MainApplication: React.FC<MainApplicationProps> = ({ className = ''
             
             <div className="flex items-center space-x-4">
               <div className="text-sm text-gray-500 dark:text-gray-400 text-dyslexia-friendly">
-                {new Date().toLocaleDateString()}
+                {typeof window !== 'undefined' ? new Date().toLocaleDateString() : ''}
               </div>
             </div>
           </div>
@@ -340,12 +379,22 @@ export const MainApplication: React.FC<MainApplicationProps> = ({ className = ''
         <main className="flex-1 overflow-hidden">
           <Tabs value={activeTab} onValueChange={handleTabChange}>
             <TabsList>
+              <TabsTrigger value="dashboard">Dashboard</TabsTrigger>
+              <TabsTrigger value="workspace">Dev Workspace</TabsTrigger>
               <TabsTrigger value="roadmap">Roadmap</TabsTrigger>
               <TabsTrigger value="chat">Co-Vision Chat</TabsTrigger>
               <TabsTrigger value="wisdom">Wisdom Memory</TabsTrigger>
               <TabsTrigger value="knowledge">Knowledge Base</TabsTrigger>
               <TabsTrigger value="terminal">Terminal</TabsTrigger>
             </TabsList>
+
+            <TabsContent value="dashboard">
+              {renderTabContent()}
+            </TabsContent>
+
+            <TabsContent value="workspace">
+              {renderTabContent()}
+            </TabsContent>
 
             <TabsContent value="roadmap">
               {renderTabContent()}

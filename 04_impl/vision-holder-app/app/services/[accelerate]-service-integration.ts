@@ -152,8 +152,16 @@ export class APIClient {
       if (!response.ok) {
         // Don't retry on client errors (4xx)
         if (response.status >= 400 && response.status < 500) {
+          let errorMessage = `${this.serviceName} error: ${response.status} ${response.statusText}`;
+          try {
+            const errorData = await response.text();
+            console.error('Detailed API Error:', errorData);
+            errorMessage += ` - ${errorData}`;
+          } catch (e) {
+            // Ignore parsing errors
+          }
           throw new ServiceError(
-            `${this.serviceName} error: ${response.status} ${response.statusText}`,
+            errorMessage,
             this.serviceName,
             response.status
           );
@@ -204,6 +212,17 @@ export class APIClient {
 
   // Generic POST request
   async post<T>(endpoint: string, data?: any, headers?: Record<string, string>): Promise<T> {
+    console.log('API POST request:', { endpoint, data });
+    console.log('Data structure:', {
+      message: data?.message,
+      messageType: typeof data?.message,
+      messageLength: data?.message?.length,
+      messageEmpty: data?.message === '',
+      messageTrimmed: data?.message?.trim?.(),
+      systemicLedger: data?.systemicLedger,
+      attachments: data?.attachments
+    });
+    console.log('Stringified data:', JSON.stringify(data));
     return this.request<T>(endpoint, {
       method: 'POST',
       headers,
@@ -228,7 +247,35 @@ export class APIClient {
 
 // Service-specific API clients
 export const systemicLedgerAPI = new APIClient('SYSTEMIC_LEDGER');
-export const aiOrchestratorAPI = new APIClient('AI_ORCHESTRATOR');
+
+// Extended AI Orchestrator API with specific methods
+class AIOrchestrator extends APIClient {
+  constructor() {
+    super('AI_ORCHESTRATOR');
+  }
+
+  async getUserPreferences() {
+    try {
+      const response: any = await this.get('/health');
+      return response.user_preferences || {};
+    } catch (error) {
+      console.warn('Could not load user preferences, using defaults');
+      return {};
+    }
+  }
+
+  async getWisdomInsights() {
+    try {
+      const response: any = await this.get('/health');
+      return response.wisdom_memory || [];
+    } catch (error) {
+      console.warn('Could not load wisdom insights, using empty array');
+      return [];
+    }
+  }
+}
+
+export const aiOrchestratorAPI = new AIOrchestrator();
 export const knowledgeBaseAPI = new APIClient('KNOWLEDGE_BASE');
 export const terminalAPI = new APIClient('TERMINAL');
 
