@@ -521,6 +521,111 @@ app.post('/terminal/logs', (req, res) => {
   }
 });
 
+// GET /terminal/services - Check health of all Vision Holder services
+app.get('/terminal/services', async (req, res) => {
+  try {
+    const services = [
+      {
+        name: 'Systemic Ledger API',
+        port: 3001,
+        url: 'http://localhost:3001',
+        healthEndpoint: '/health'
+      },
+      {
+        name: 'AI Orchestrator API',
+        port: 3002,
+        url: 'http://localhost:3002',
+        healthEndpoint: '/health'
+      },
+      {
+        name: 'Knowledge Base API',
+        port: 3003,
+        url: 'http://localhost:3003',
+        healthEndpoint: '/health'
+      },
+      {
+        name: 'Terminal API',
+        port: 3004,
+        url: 'http://localhost:3004',
+        healthEndpoint: '/health'
+      }
+    ];
+
+    const serviceChecks = await Promise.allSettled(
+      services.map(async (service) => {
+        const startTime = Date.now();
+        try {
+          const response = await fetch(`${service.url}${service.healthEndpoint}`, {
+            method: 'GET',
+            signal: AbortSignal.timeout(5000)
+          });
+          
+          const responseTime = Date.now() - startTime;
+          
+          return {
+            name: service.name,
+            port: service.port,
+            status: response.ok ? 'healthy' : 'unhealthy',
+            url: service.url,
+            last_check: new Date().toISOString(),
+            response_time: responseTime
+          };
+        } catch (error) {
+          const responseTime = Date.now() - startTime;
+          return {
+            name: service.name,
+            port: service.port,
+            status: 'unhealthy',
+            url: service.url,
+            last_check: new Date().toISOString(),
+            response_time: responseTime
+          };
+        }
+      })
+    );
+
+    const serviceStatuses = serviceChecks.map((result, index) => {
+      if (result.status === 'fulfilled') {
+        return result.value;
+      } else {
+        const service = services[index];
+        if (!service) {
+          return {
+            name: 'Unknown Service',
+            port: 0,
+            status: 'unknown',
+            url: 'unknown',
+            last_check: new Date().toISOString(),
+            response_time: null
+          };
+        }
+        return {
+          name: service.name,
+          port: service.port,
+          status: 'unknown',
+          url: service.url,
+          last_check: new Date().toISOString(),
+          response_time: null
+        };
+      }
+    });
+
+    const healthyCount = serviceStatuses.filter(s => s.status === 'healthy').length;
+    const overallStatus = healthyCount === serviceStatuses.length ? 'healthy' : 
+                         healthyCount > 0 ? 'degraded' : 'unhealthy';
+
+    res.json({
+      services: serviceStatuses,
+      overall_status: overallStatus,
+      healthy_count: healthyCount,
+      total_count: serviceStatuses.length
+    });
+  } catch (error) {
+    console.error('Error checking service health:', error);
+    res.status(500).json({ error: 'Failed to check service health' });
+  }
+});
+
 // Error handling middleware
 app.use((error: any, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
   console.error('Terminal API Error:', error);

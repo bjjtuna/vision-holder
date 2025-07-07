@@ -122,6 +122,30 @@ Get organized roadmap data by level.
 
 ### AI Orchestrator API (http://localhost:3002)
 
+#### POST /orchestrator/chat
+Real-time AI chat with attachment support.
+
+**Request Body:**
+```json
+{
+  "message": "How do I create a component?",
+  "systemicLedger": {...},
+  "attachments": [
+    {"name": "file.pdf", "size": 12345, "type": "application/pdf"}
+  ]
+}
+```
+
+**Response:**
+```json
+{
+  "response": "AI response text",
+  "context": "Enhanced context used",
+  "wisdom_insights": [...],
+  "new_insights_count": 2
+}
+```
+
 #### POST /orchestrator/context
 Generate minimal context prompt for builder AIs.
 

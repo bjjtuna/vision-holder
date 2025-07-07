@@ -231,13 +231,27 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
 
   // Send message with real AI integration
   const sendMessage = async () => {
-    if (!inputValue.trim() && attachments.length === 0) return;
+    console.log('sendMessage called with inputValue:', JSON.stringify(inputValue));
+    console.log('inputValue length:', inputValue?.length);
+    console.log('inputValue trimmed:', JSON.stringify(inputValue?.trim()));
+    console.log('attachments:', attachments?.length);
+    
+    if (!inputValue || !inputValue.trim() || inputValue.trim().length === 0) {
+      if (attachments.length === 0) {
+        console.log('Message rejected: empty input and no attachments');
+        alert('Please type a message before sending.');
+        return;
+      }
+    }
 
     console.log('Sending message:', inputValue);
     
     // Store the message before clearing the input
     const messageText = inputValue.trim();
     const messageAttachments = [...attachments];
+    
+    console.log('messageText after trim:', JSON.stringify(messageText));
+    console.log('messageText length:', messageText.length);
 
     const userMessage: ChatMessage = {
       id: Date.now().toString(),
@@ -270,6 +284,11 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
         attachments: messageAttachments.map(f => ({ name: f.name, size: f.size, type: f.type }))
       };
       console.log('Chat request data:', requestData);
+      console.log('Request data stringified:', JSON.stringify(requestData));
+      console.log('Message field specifically:', JSON.stringify(requestData.message));
+      console.log('Message field length:', requestData.message?.length);
+      console.log('Message field empty check:', requestData.message === '');
+      console.log('Message field undefined check:', requestData.message === undefined);
       
       // Call the new real AI chat endpoint
       const response = await aiOrchestratorAPI.post<{
@@ -310,9 +329,18 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
 
     } catch (error) {
       console.error('Failed to get AI response:', error);
+      console.error('Full error object:', JSON.stringify(error, null, 2));
+      
+      let errorContent = 'Sorry, I encountered an error processing your request. Please try again.';
+      
       if (error.response) {
         console.error('Error response data:', error.response.data);
         console.error('Error response status:', error.response.status);
+        
+        // Show the actual backend error if it's a validation error
+        if (error.response.status === 400 && error.response.data?.error) {
+          errorContent = `Error: ${error.response.data.error}`;
+        }
       }
       
       // Remove typing indicator
@@ -322,7 +350,7 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
       const errorMessage: ChatMessage = {
         id: (Date.now() + 1).toString(),
         type: 'ai',
-        content: 'Sorry, I encountered an error processing your request. Please try again.',
+        content: errorContent,
         timestamp: new Date()
       };
 
@@ -336,6 +364,7 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
   const handleKeyPress = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
+      console.log('Enter pressed, current inputValue:', JSON.stringify(inputValue));
       sendMessage();
     }
   };
@@ -490,7 +519,10 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
           <div className="flex-1 relative">
             <textarea
               value={inputValue}
-              onChange={(e) => setInputValue(e.target.value)}
+              onChange={(e) => {
+                console.log('Input changed:', JSON.stringify(e.target.value));
+                setInputValue(e.target.value);
+              }}
               onKeyPress={handleKeyPress}
               placeholder="Type your message or use voice input..."
               className="w-full px-3 py-2 border border-gray-300 rounded-lg resize-none focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white text-gray-900 dark:bg-gray-800 dark:text-white dark:border-gray-600"

@@ -165,7 +165,7 @@ export const MainApplication: React.FC<MainApplicationProps> = ({ className = ''
       );
     }
 
-    if (error) {
+    if (error && activeTab !== 'chat') {
       return (
         <div className="flex items-center justify-center h-full">
           <div className="text-center max-w-md">
@@ -197,10 +197,30 @@ export const MainApplication: React.FC<MainApplicationProps> = ({ className = ''
         );
       case 'chat':
         return (
-          <ChatInterface 
-            onNewEntry={handleNewEntry}
-            className="h-full"
-          />
+          <div className="h-full flex flex-col">
+            {error && (
+              <div className="bg-yellow-50 dark:bg-yellow-900/20 border-b border-yellow-200 dark:border-yellow-800 px-4 py-2">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center space-x-2">
+                    <AlertCircle className="w-4 h-4 text-yellow-600 dark:text-yellow-400" />
+                    <span className="text-sm text-yellow-800 dark:text-yellow-200">
+                      Backend connection issues - AI responses may be limited
+                    </span>
+                  </div>
+                  <button
+                    onClick={() => window.location.reload()}
+                    className="text-xs px-2 py-1 bg-yellow-200 dark:bg-yellow-800 text-yellow-800 dark:text-yellow-200 rounded hover:bg-yellow-300 dark:hover:bg-yellow-700"
+                  >
+                    Retry
+                  </button>
+                </div>
+              </div>
+            )}
+            <ChatInterface 
+              onNewEntry={handleNewEntry}
+              className="flex-1"
+            />
+          </div>
         );
       case 'wisdom':
         return (
@@ -328,7 +348,7 @@ export const MainApplication: React.FC<MainApplicationProps> = ({ className = ''
         onClose={() => setShowOnboarding(false)}
       />
       {/* Sidebar */}
-      <div className={`${isSidebarOpen ? 'w-64' : 'w-16'} bg-white dark:bg-gray-800 border-r border-gray-200 dark:border-gray-700 transition-all duration-300 flex flex-col`}>
+      <div className={`${isSidebarOpen ? 'w-64' : 'w-16'} bg-white dark:bg-gray-800 border-r border-gray-200 dark:border-gray-700 transition-all duration-300 flex flex-col min-w-0`}>
         {/* Header */}
         <div className="flex items-center justify-between p-4 border-b border-gray-200 dark:border-gray-700">
           {isSidebarOpen && (
@@ -401,7 +421,7 @@ export const MainApplication: React.FC<MainApplicationProps> = ({ className = ''
       </div>
 
       {/* Main Content */}
-      <div className="flex-1 flex flex-col overflow-hidden">
+      <div className="flex-1 flex flex-col overflow-hidden min-w-0">
         {/* Top Bar */}
         <header className="bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 px-6 py-4">
           <div className="flex items-center justify-between">

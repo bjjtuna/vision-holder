@@ -99,8 +99,20 @@ knowledge_pid=$?
 start_service "Terminal API" 3004 "[safeguard]-terminal-api.ts"
 terminal_pid=$?
 
+# Start Analytics API (Port 3005)
+start_service "Analytics API" 3005 "[empathize]-analytics-api.ts"
+analytics_pid=$?
+
+# Start Vision Holder Handoff API (Port 3007)
+start_service "Vision Holder Handoff API" 3007 "[empathize]-vision-holder-handoff-api.ts"
+handoff_pid=$?
+
+# Start Command API (Port 3006)
+start_service "Command API" 3006 "[accelerate]-command-api.ts"
+command_pid=$?
+
 # Check if all services started successfully
-if [ $ledger_pid -eq 0 ] && [ $orchestrator_pid -eq 0 ] && [ $knowledge_pid -eq 0 ] && [ $terminal_pid -eq 0 ]; then
+if [ $ledger_pid -eq 0 ] && [ $orchestrator_pid -eq 0 ] && [ $knowledge_pid -eq 0 ] && [ $terminal_pid -eq 0 ] && [ $analytics_pid -eq 0 ] && [ $handoff_pid -eq 0 ] && [ $command_pid -eq 0 ]; then
     echo ""
     echo "🎉 All services started successfully!"
     echo ""
@@ -109,6 +121,9 @@ if [ $ledger_pid -eq 0 ] && [ $orchestrator_pid -eq 0 ] && [ $knowledge_pid -eq 
     echo "   • AI Orchestrator API: http://localhost:3002"
     echo "   • Knowledge Base API: http://localhost:3003"
     echo "   • Terminal API: http://localhost:3004"
+    echo "   • Analytics API: http://localhost:3005"
+    echo "   • Command API: http://localhost:3006"
+    echo "   • Vision Holder Handoff API: http://localhost:3007"
     echo ""
     echo "🌐 Frontend Application: http://localhost:3000"
     echo ""
@@ -122,7 +137,7 @@ else
     echo "❌ Some services failed to start. Please check the logs above."
     echo ""
     echo "🔧 Troubleshooting:"
-    echo "   1. Make sure ports 3001-3004 are not in use"
+    echo "   1. Make sure ports 3001-3005 are not in use"
     echo "   2. Check that all dependencies are installed"
     echo "   3. Verify TypeScript files are present"
     echo "   4. Check for any syntax errors in the API files"
